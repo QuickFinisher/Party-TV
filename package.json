@@ -1,0 +1,9 @@
+{
+  "name": "party-tv",
+  "version": "1.0.0",
+  "description": "Phone-controlled party games for a Samsung Tizen TV (TizenBrew app module)",
+  "packageType": "app",
+  "appName": "Party TV",
+  "appPath": "tv/index.html",
+  "keys": []
+}

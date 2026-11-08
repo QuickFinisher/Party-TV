@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Party TV Controller</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0d0b1e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="stylesheet" href="controller.css">
+</head>
+<body>
+  <header id="bar">
+    <div class="logo">PARTY<span>TV</span></div>
+    <div id="me" class="me hidden"><span class="dot"></span><span id="meName"></span></div>
+  </header>
+
+  <!-- Join screen -->
+  <main id="join" class="view">
+    <h1>Join the party</h1>
+    <label>Room code
+      <input id="code" maxlength="4" autocomplete="off" autocapitalize="characters" placeholder="ABCD">
+    </label>
+    <label>Your name
+      <input id="name" maxlength="12" autocomplete="nickname" placeholder="Cody">
+    </label>
+    <button id="joinBtn" class="big">Join</button>
+    <p id="joinMsg" class="msg"></p>
+  </main>
+
+  <!-- Everything after joining renders here -->
+  <main id="play" class="view hidden"></main>
+
+  <!-- Reactions (shown in lobby + waiting screens) -->
+  <div id="emotes" class="emotes hidden">
+    <button>😂</button><button>🔥</button><button>😱</button><button>👏</button>
+    <button>💩</button><button>❤️</button><button>🤯</button><button>😎</button>
+  </div>
+
+  <script src="lib/peerjs.min.js"></script>
+  <script src="net.js"></script>
+  <script src="controller.js"></script>
+</body>
+</html>

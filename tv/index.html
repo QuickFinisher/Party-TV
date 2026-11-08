@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Party TV</title>
+  <meta name="viewport" content="width=1920, height=1080">
+  <link rel="stylesheet" href="tv.css">
+</head>
+<body>
+  <div id="stage">
+    <header id="topbar">
+      <div class="logo">PARTY<span>TV</span></div>
+      <div id="netStatus" class="net-status busy">Starting…</div>
+    </header>
+
+    <section id="screen-lobby" class="screen">
+      <div class="join-panel">
+        <h2>Join on your phone</h2>
+        <div id="qr" class="qr"></div>
+        <div class="code-label">Room code</div>
+        <div id="roomCode" class="room-code">----</div>
+        <div id="joinUrl" class="join-url"></div>
+      </div>
+      <div class="main-panel">
+        <h2>Pick a game</h2>
+        <div id="gameMenu" class="game-menu"></div>
+        <div class="menu-hint">◀ ▶ ▲ ▼ to choose · <b>OK</b> to start · or the 👑 player picks on their phone</div>
+        <h2 class="players-h">Players <span id="playerCount"></span></h2>
+        <div id="playerList" class="player-list"></div>
+      </div>
+    </section>
+
+    <section id="screen-game" class="screen hidden"></section>
+    <div id="toast" class="toast"></div>
+  </div>
+
+  <script src="lib/peerjs.min.js"></script>
+  <script src="lib/qrcode.js"></script>
+  <script src="config.js"></script>
+  <script src="net.js"></script>
+  <script src="tv.js"></script>
+  <script src="games/catalog.js"></script>
+  <script>App.boot();</script>
+</body>
+</html>
