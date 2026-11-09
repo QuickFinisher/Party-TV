@@ -286,13 +286,13 @@
 
     number: function (d) {
       play.innerHTML = '<div class="prompt">' + esc(d.prompt || '') + '</div>' +
-        '<form class="bid" novalidate><div class="bidrow"><span>$</span><input id="bin" inputmode="numeric" maxlength="11" autocomplete="off" placeholder="0"></div>' +
-        '<button class="big">Lock in bid</button></form><p class="msg">' + esc(d.hint || '') + '</p>';
+        '<form class="bid" novalidate><div class="bidrow">' + (d.unit === '' ? '' : '<span>' + esc(d.unit || '$') + '</span>') + '<input id="bin" inputmode="numeric" maxlength="11" autocomplete="off" placeholder="0"></div>' +
+        '<button class="big">' + esc(d.button || 'Lock in bid') + '</button></form><p class="msg">' + esc(d.hint || '') + '</p>';
       var inp = $('#bin');
       setTimeout(function () { inp.focus(); }, 50);
       inp.addEventListener('input', function () {
         var digits = inp.value.replace(/[^0-9]/g, '').slice(0, 8);
-        inp.value = digits ? (+digits).toLocaleString() : '';
+        inp.value = digits ? (d.plain ? digits : (+digits).toLocaleString()) : '';
       });
       play.querySelector('form').onsubmit = function (e) {
         e.preventDefault();

@@ -209,3 +209,5 @@ input, select, textarea { font-size: max(16px, 1em); }
 .langbtn { align-self: flex-end; margin: 0 0 8px auto; display: block; background: var(--panel); color: #fff; border: 2px solid #3a3480; border-radius: 999px; padding: 6px 14px; font-size: 14px; font-weight: 800; }
 .qtext { text-align: center; font-size: 19px; font-weight: 800; line-height: 1.3; margin: 6px 4px 12px; }
 .choices button { font-size: 16px; line-height: 1.2; }
+.me { max-width: 52vw; } #meName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v-btn, .choices button { overflow-wrap: anywhere; }
