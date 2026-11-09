@@ -86,17 +86,43 @@
     } else if (m.t === 'full') {
       show('join'); $('#joinBtn').disabled = false; joinMsg('That game is full (8 players).', true);
     } else if (m.t === 'ui') {
+      bar(m.g, m.v);
       render(m.mode, m.data || {});
+    } else if (m.t === 'bar') {
+      bar(m.g, m.v);
+    } else if (m.t === 'left') {
+      leftGame();
     } else if (m.t === 'g') {
       onGame(m);
     }
   }
 
+  /* ---------- End game (VIP) / Leave (everyone) ---------- */
+  var barState = { g: 0, v: 0 };
+  function bar(g, v) {
+    barState = { g: g ? 1 : 0, v: v ? 1 : 0 };
+    var b = $('#exitBtn'); if (!b) return;
+    b.classList.toggle('hidden', !barState.g);
+    b.textContent = barState.v ? '⏹ End game' : '🚪 Leave';
+  }
+  $('#exitBtn').onclick = function () {
+    if (!conn) return;
+    if (barState.v) { if (confirm('End this game for everyone and go back to the lobby?')) send({ t: 'endGame' }); }
+    else if (confirm('Leave this game? You can rejoin any time.')) send({ t: 'leave' });
+  };
+  function leftGame() {
+    var c = conn; conn = null; clearInterval(hbTimer);
+    try { session && session.destroy(); } catch (e) {}
+    bar(0, 0);
+    render('center', { icon: '👋', title: 'You left the game', text: 'Tap here to rejoin', tap: function () { show('join'); $('#joinBtn').disabled = false; doJoin(); } });
+  }
+
   /* ---------- views ---------- */
   function render(mode, d) {
     if (cleanup) { cleanup(); cleanup = null; }
-    play.innerHTML = '';
-    var emotes = mode === 'lobby' || mode === 'wait' || mode === 'result' || mode === 'center';
+    // fresh container each time so listeners from the previous screen never stack up
+    var fresh = play.cloneNode(false); play.parentNode.replaceChild(fresh, play); play = fresh;
+    var emotes = mode === 'lobby' || mode === 'wait' || mode === 'result' || mode === 'center' || !!(d && d.emotes);
     $('#emotes').classList.toggle('hidden', !emotes);
     (VIEWS[mode] || VIEWS.wait)(d);
   }
@@ -177,11 +203,14 @@
         VIEWS.center({ icon: '🎮', title: 'You\'re in!', text: 'Waiting for the 👑 player or the TV remote to pick a game. ' + d.players + ' player' + (d.players === 1 ? '' : 's') + ' here.' });
         return;
       }
-      play.innerHTML = '<h2>👑 You pick the game</h2><div class="games">' + d.games.map(function (g) {
+      var lastCat = null;
+      play.innerHTML = '<h2>👑 You pick the game</h2><p class="msg">' + d.players + ' player' + (d.players === 1 ? '' : 's') + ' connected</p><div class="games">' + d.games.map(function (g) {
         var locked = d.players < g.min;
-        return '<button data-g="' + g.id + '"' + (locked ? ' disabled' : '') + '><span class="gi">' + g.icon + '</span><span>' + esc(g.name) +
-          '<small>' + (locked ? 'Needs ' + g.min + '+ players' : 'Tap to start') + '</small></span></button>';
-      }).join('') + '</div><p class="msg">' + d.players + ' player' + (d.players === 1 ? '' : 's') + ' connected</p>';
+        var head = g.cat && g.cat !== lastCat ? '<div class="gcat">' + esc(g.cat) + '</div>' : '';
+        lastCat = g.cat;
+        return head + '<button data-g="' + g.id + '"' + (locked ? ' disabled' : '') + '><span class="gi">' + g.icon + '</span><span>' + esc(g.name) +
+          '<small>' + (locked ? 'Needs ' + g.min + '+ players' : (g.min === g.max ? g.min : g.min + '–' + (g.max || 8)) + ' players') + '</small></span></button>';
+      }).join('') + '</div>';
       play.querySelectorAll('[data-g]').forEach(function (b) {
         b.onclick = function () { buzz(); send({ t: 'pick', game: b.getAttribute('data-g') }); };
       });
@@ -327,13 +356,114 @@
       };
     },
 
+    /* Generic screens any game can use. See tv/games/README-GAMES.md for the full list. */
+
+    // buttons: { title, text, lines:[str], buttons:[{id,label,sub,color,fg,on,dis,wide}], cols, chips:[{id,label,on,color}], emotes }
+    //   → {kind:'btn', value:id}, chips → {kind:'chip', value:id}
+    buttons: function (d) {
+      var cols = d.cols || 2;
+      play.innerHTML = (d.title ? '<h2 class="v-title">' + esc(d.title) + '</h2>' : '') +
+        (d.text ? '<p class="v-text">' + esc(d.text) + '</p>' : '') +
+        (d.lines ? '<div class="v-lines">' + d.lines.map(function (l) { return '<div>' + esc(l) + '</div>'; }).join('') + '</div>' : '') +
+        (d.chips ? '<div class="v-chips">' + d.chips.map(function (c) {
+          return '<button class="v-chip' + (c.on ? ' on' : '') + '" data-chip="' + esc(c.id) + '"' + (c.color ? ' style="--cc:' + c.color + '"' : '') + (c.dis ? ' disabled' : '') + '>' + esc(c.label) + '</button>';
+        }).join('') + '</div>' : '') +
+        '<div class="v-btns" style="grid-template-columns:repeat(' + cols + ',1fr)">' + (d.buttons || []).map(function (b) {
+          return '<button class="v-btn' + (b.on ? ' on' : '') + (b.wide ? ' wide' : '') + '" data-btn="' + esc(b.id) + '"' + (b.dis ? ' disabled' : '') +
+            ' style="' + (b.color ? 'background:' + b.color + ';' : '') + (b.fg ? 'color:' + b.fg + ';' : '') + '">' + esc(b.label) + (b.sub ? '<small>' + esc(b.sub) + '</small>' : '') + '</button>';
+        }).join('') + '</div>';
+      play.addEventListener('click', function (e) {
+        var c = e.target.closest('[data-chip]'); if (c && !c.disabled) { buzz(10); input({ kind: 'chip', value: c.dataset.chip }); return; }
+        var b = e.target.closest('[data-btn]'); if (b && !b.disabled) { buzz(15); input({ kind: 'btn', value: b.dataset.btn }); }
+      });
+    },
+
+    // grid: { title, text, rows, cols, cells:[{t,bg,fg,ring,dis,sm}] (row-major), square(default true), buttons:[...as above], emotes }
+    //   tap → {kind:'cell', i, r, c};  buttons → {kind:'btn', value}
+    grid: function (d) {
+      var rows = d.rows, cols = d.cols, cells = d.cells || [];
+      play.innerHTML = (d.title ? '<h2 class="v-title">' + esc(d.title) + '</h2>' : '') +
+        (d.text ? '<p class="v-text">' + esc(d.text) + '</p>' : '') +
+        '<div class="v-grid' + (d.square === false ? '' : ' sq') + '" style="grid-template-columns:repeat(' + cols + ',1fr);--cols:' + cols + ';--rows:' + rows + '">' +
+        cells.map(function (c, i) {
+          c = c || {};
+          return '<button class="v-cell' + (c.sm ? ' sm' : '') + '" data-i="' + i + '"' + (c.dis ? ' disabled' : '') + ' style="' +
+            (c.bg ? 'background:' + c.bg + ';' : '') + (c.fg ? 'color:' + c.fg + ';' : '') + (c.ring ? 'box-shadow:inset 0 0 0 3px ' + c.ring + ';' : '') + '">' + esc(c.t || '') + '</button>';
+        }).join('') + '</div>' +
+        (d.buttons && d.buttons.length ? '<div class="v-btns" style="grid-template-columns:repeat(' + Math.min(d.buttons.length, d.bcols || 3) + ',1fr)">' + d.buttons.map(function (b) {
+          return '<button class="v-btn' + (b.on ? ' on' : '') + '" data-btn="' + esc(b.id) + '"' + (b.dis ? ' disabled' : '') + (b.color ? ' style="background:' + b.color + '"' : '') + '>' + esc(b.label) + '</button>';
+        }).join('') + '</div>' : '');
+      play.addEventListener('click', function (e) {
+        var c = e.target.closest('[data-i]');
+        if (c && !c.disabled) { var i = +c.dataset.i; buzz(10); input({ kind: 'cell', i: i, r: Math.floor(i / cols), c: i % cols }); return; }
+        var b = e.target.closest('[data-btn]'); if (b && !b.disabled) { buzz(15); input({ kind: 'btn', value: b.dataset.btn }); }
+      });
+    },
+
+    // pad: a touch area that reports where your finger is. { title, text, color, aspect (w/h, default 1), buttons }
+    //   → {kind:'pos', x:0..1, y:0..1, down:1} while touching (about 30/s), {kind:'pos', down:0, x, y} on release
+    pad: function (d) {
+      play.innerHTML = (d.title ? '<h2 class="v-title">' + esc(d.title) + '</h2>' : '') + (d.text ? '<p class="v-text">' + esc(d.text) + '</p>' : '') +
+        '<div class="v-pad" id="vpad" style="aspect-ratio:' + (d.aspect || 1) + ';' + (d.color ? '--pc:' + d.color : '') + '"><i id="vdot"></i></div>' +
+        (d.buttons && d.buttons.length ? '<div class="v-btns" style="grid-template-columns:repeat(' + d.buttons.length + ',1fr)">' + d.buttons.map(function (b) {
+          return '<button class="v-btn" data-btn="' + esc(b.id) + '">' + esc(b.label) + '</button>'; }).join('') + '</div>' : '');
+      var pad = $('#vpad'), dot = $('#vdot'), active = null, last = 0, cur = null;
+      function at(e) { var r = pad.getBoundingClientRect(); return [Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), Math.max(0, Math.min(1, (e.clientY - r.top) / r.height))]; }
+      function show(p) { dot.style.left = (p[0] * 100) + '%'; dot.style.top = (p[1] * 100) + '%'; dot.style.opacity = 1; }
+      function sendPos(down) { if (cur) input({ kind: 'pos', x: +cur[0].toFixed(3), y: +cur[1].toFixed(3), down: down ? 1 : 0 }); }
+      pad.addEventListener('pointerdown', function (e) { e.preventDefault(); active = e.pointerId; try { pad.setPointerCapture(e.pointerId); } catch (x) {} cur = at(e); show(cur); sendPos(1); last = Date.now(); buzz(8); });
+      pad.addEventListener('pointermove', function (e) { if (e.pointerId !== active) return; cur = at(e); show(cur); if (Date.now() - last > 33) { last = Date.now(); sendPos(1); } });
+      function end(e) { if (e.pointerId !== active) return; active = null; sendPos(0); dot.style.opacity = .35; }
+      ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(function (t) { pad.addEventListener(t, end); });
+      var tick = setInterval(function () { if (active !== null && Date.now() - last > 120) { last = Date.now(); sendPos(1); } }, 60);
+      play.addEventListener('click', function (e) { var b = e.target.closest('[data-btn]'); if (b) { buzz(15); input({ kind: 'btn', value: b.dataset.btn }); } });
+      cleanup = function () { clearInterval(tick); if (active !== null) sendPos(0); };
+    },
+
+    // fling: drag and release. { title, text, mode:'slingshot'|'swipe', color, buttons }
+    //   while dragging → {kind:'aim', dx, dy} (−1..1, relative to the pad size, from where you touched; about 15/s)
+    //   on release → {kind:'fling', dx, dy, ms}   (slingshot: the TV launches opposite to dx/dy; swipe: in the dx/dy direction)
+    fling: function (d) {
+      play.innerHTML = (d.title ? '<h2 class="v-title">' + esc(d.title) + '</h2>' : '') + (d.text ? '<p class="v-text">' + esc(d.text) + '</p>' : '') +
+        '<div class="v-pad fling" id="vfl"' + (d.color ? ' style="--pc:' + d.color + '"' : '') + '><canvas id="vflc"></canvas><span class="v-hint">' +
+        (d.mode === 'swipe' ? 'Swipe up to throw ↑' : 'Pull back and let go') + '</span></div>' +
+        (d.buttons && d.buttons.length ? '<div class="v-btns" style="grid-template-columns:repeat(' + d.buttons.length + ',1fr)">' + d.buttons.map(function (b) {
+          return '<button class="v-btn" data-btn="' + esc(b.id) + '">' + esc(b.label) + '</button>'; }).join('') + '</div>' : '');
+      var pad = $('#vfl'), cv = $('#vflc'), g = cv.getContext('2d'), start = null, t0 = 0, last = 0, cur = null;
+      function size() { var r = pad.getBoundingClientRect(); cv.width = r.width; cv.height = r.height; }
+      size();
+      function vec(e) { var r = pad.getBoundingClientRect(), s = Math.max(r.width, r.height) / 2; return [(e.clientX - start[0]) / s, (e.clientY - start[1]) / s]; }
+      function drawAim() {
+        g.clearRect(0, 0, cv.width, cv.height); if (!start || !cur) return;
+        var r = pad.getBoundingClientRect(), sx = start[0] - r.left, sy = start[1] - r.top, s = Math.max(r.width, r.height) / 2;
+        g.strokeStyle = getComputedStyle(pad).getPropertyValue('--pc') || '#ffd43b'; g.lineWidth = 6; g.lineCap = 'round';
+        g.beginPath(); g.moveTo(sx, sy); g.lineTo(sx + cur[0] * s, sy + cur[1] * s); g.stroke();
+        g.fillStyle = '#fff'; g.beginPath(); g.arc(sx, sy, 10, 0, 7); g.fill();
+      }
+      pad.addEventListener('pointerdown', function (e) { e.preventDefault(); try { pad.setPointerCapture(e.pointerId); } catch (x) {} start = [e.clientX, e.clientY]; cur = [0, 0]; t0 = Date.now(); buzz(8); });
+      pad.addEventListener('pointermove', function (e) {
+        if (!start) return; cur = vec(e); drawAim();
+        if (Date.now() - last > 66) { last = Date.now(); input({ kind: 'aim', dx: +cur[0].toFixed(3), dy: +cur[1].toFixed(3) }); }
+      });
+      function end() {
+        if (!start) return;
+        var v = cur || [0, 0]; start = null; drawAim();
+        if (Math.abs(v[0]) + Math.abs(v[1]) < 0.06) { input({ kind: 'aim', dx: 0, dy: 0 }); return; }
+        buzz(30); input({ kind: 'fling', dx: +v[0].toFixed(3), dy: +v[1].toFixed(3), ms: Date.now() - t0 });
+      }
+      ['pointerup', 'pointercancel'].forEach(function (t) { pad.addEventListener(t, end); });
+      play.addEventListener('click', function (e) { var b = e.target.closest('[data-btn]'); if (b) { buzz(15); input({ kind: 'btn', value: b.dataset.btn }); } });
+    },
+
     draw: function (d) {
       var COLORS = ['#111111', '#ff4d6d', '#4dabff', '#51cf66', '#ffd43b', '#ff922b', '#cc5de8', '#8d5524'];
-      play.innerHTML = '<div class="wordbox"><small>DRAW THIS (don\'t write it!)</small><b>' + esc(d.word) + '</b></div>' +
+      play.innerHTML = '<div class="wordbox"><small>' + esc(d.title || 'DRAW THIS (don\'t write it!)') + '</small><b>' + esc(d.word || '') + '</b></div>' +
         '<canvas class="pad" id="pad"></canvas><div class="tools" id="tools">' +
         COLORS.map(function (c, i) { return '<button class="sw' + (i === 0 ? ' on' : '') + '" data-c="' + c + '" style="background:' + c + '"></button>'; }).join('') +
         '<button class="tb" data-w="4">Thin</button><button class="tb on" data-w="9">Med</button><button class="tb" data-w="22">Fat</button>' +
-        '<button class="tb" data-c="erase">Eraser</button><button class="tb" id="clr">Clear</button></div>';
+        '<button class="tb" data-c="erase">Eraser</button><button class="tb" id="clr">Clear</button></div>' +
+        (d.done ? '<button class="big" id="drawDone">' + esc(d.done) + '</button>' : '');
+      if (d.done) $('#drawDone').onclick = function () { buzz(20); input({ kind: 'btn', value: 'done' }); this.disabled = true; this.textContent = 'Sent ✓'; };
       var cv = $('#pad'), g = cv.getContext('2d');
       var color = COLORS[0], width = 9, strokeId = 0, drawing = false, pending = [], last = null;
       function size() {
@@ -394,9 +524,10 @@
     },
 
     stick: function (d) {
-      play.innerHTML = '<div class="stickwrap"><div class="flash" id="flash">' + esc(d.flash || '') + '</div>' +
+      play.innerHTML = '<div class="stickwrap"' + (d.color ? ' style="--me:' + esc(d.color) + '"' : '') + '><div class="flash" id="flash">' + esc(d.flash || '') + '</div>' +
         '<div class="stick" id="st"><div class="tip">drag anywhere to move</div><div class="base" id="sb" style="display:none"></div><div class="knob" id="sk" style="display:none"></div></div>' +
-        '<button class="dash" id="dash">' + esc(d.button || 'DASH') + '</button></div>';
+        '<div class="sbtns">' + (d.button2 ? '<button class="dash alt" data-v="' + esc(d.value2 || 'b2') + '">' + esc(d.button2) + '</button>' : '') +
+        '<button class="dash" id="dash" data-v="' + esc(d.value || 'dash') + '">' + esc(d.button || 'DASH') + '</button></div></div>';
       if (d.flash) buzz([80, 40, 80]);
       var st = $('#st'), sb = $('#sb'), sk = $('#sk'), ox = 0, oy = 0, active = null, jx = 0, jy = 0, sentX = 9, sentY = 9;
       var RAD = 65;
@@ -426,8 +557,13 @@
         x = Math.round(x * 20) / 20; y = Math.round(y * 20) / 20;
         if (x !== sentX || y !== sentY) { sentX = x; sentY = y; input({ kind: 'joy', x: x, y: y }); }
       }, 50);
-      function dash() { input({ kind: 'btn', value: 'dash' }); buzz(25); var b = $('#dash'); b.classList.add('hit'); setTimeout(function () { b.classList.remove('hit'); }, 150); }
-      $('#dash').addEventListener('pointerdown', function (e) { e.preventDefault(); dash(); });
+      function dash() { var b = $('#dash'); input({ kind: 'btn', value: b.dataset.v, v: 1 }); buzz(25); b.classList.add('hit'); setTimeout(function () { b.classList.remove('hit'); if (d.hold) input({ kind: 'btn', value: b.dataset.v, v: 0 }); }, 150); }
+      play.querySelectorAll('.dash').forEach(function (b) {
+        b.addEventListener('pointerdown', function (e) { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (x) {} input({ kind: 'btn', value: b.dataset.v, v: 1 }); buzz(25); b.classList.add('hit'); });
+        ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(function (t) {
+          b.addEventListener(t, function () { if (!b.classList.contains('hit')) return; b.classList.remove('hit'); if (d.hold) input({ kind: 'btn', value: b.dataset.v, v: 0 }); });
+        });
+      });
       cleanup = function () { clearInterval(t); document.removeEventListener('keydown', kd); document.removeEventListener('keyup', kd); input({ kind: 'joy', x: 0, y: 0 }); };
     }
   };
